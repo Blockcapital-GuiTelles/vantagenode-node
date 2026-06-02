@@ -34,16 +34,21 @@ services:
       # via .env so the cleartext password never lives in the repo.
       RPCAUTH: ${BITCOIND_RPCAUTH}
     # Templating the rpcauth into bitcoin.conf at start-up: cheapest
-    # approach is a small entrypoint that appends the line, but the
-    # bitcoind image already supports it via the env var when bitcoin.conf
-    # contains the placeholder `rpcauth=${RPCAUTH}`. We avoid that to
-    # keep the conf checked-in plain; the appended line lives in the
-    # mounted overlay below.
-    command:
+    # approach is a small entrypoint that appends the line. We use
+    # entrypoint: (not command:) because the lncm/bitcoind image ships
+    # its own ENTRYPOINT and treating our sh script as `command` makes
+    # it land as positional args to that script, blowing up with the
+    # classic `Command line contains unexpected token 'sh'` error.
+    # Overriding the entrypoint entirely + invoking sh directly is
+    # cleaner.
+    entrypoint:
       - sh
       - -c
       - |
-        echo "rpcauth=$$RPCAUTH" >> /data/.bitcoin/bitcoin.conf
+        # Idempotent: only append the rpcauth line once per (re)start.
+        if ! grep -q "^rpcauth=" /data/.bitcoin/bitcoin.conf; then
+          echo "rpcauth=$RPCAUTH" >> /data/.bitcoin/bitcoin.conf
+        fi
         exec bitcoind -datadir=/data/.bitcoin
 
   postgres:
