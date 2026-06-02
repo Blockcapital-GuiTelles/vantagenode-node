@@ -1,0 +1,31 @@
+# Secrets — never commit.
+.env
+.env.local
+.env.*.local
+
+# Local node data (never reaches the repo — it's hundreds of GB).
+/opt/vantagenode/
+data/
+*.dat
+debug.log
+bitcoin/
+
+# Build artefacts.
+indexer/node_modules/
+indexer/dist/
+indexer/.tsbuildinfo
+
+# OS / editor cruft.
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Caddy local cache (when running compose locally).
+caddy-data/
+caddy-config/
+
+# Logs.
+*.log
+logs/

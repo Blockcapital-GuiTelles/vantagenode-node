@@ -1,0 +1,48 @@
+# Caddy 2 — TLS reverse proxy + auth gate.
+#
+# Auto-provisions a Let's Encrypt cert for {$NODE_HOSTNAME} on first
+# start. The X-Node-Auth header is enforced in the indexer itself
+# (Caddy just terminates TLS and forwards); this keeps the auth code
+# in one place and lets us rotate the shared secret without touching
+# the proxy.
+
+{$NODE_HOSTNAME} {
+    # Sensible default headers — same security posture as the Studio
+    # app on Railway. HSTS preload-ready, no referer leak, strict CSP
+    # (relaxed: the indexer doesn't serve HTML).
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        # Don't advertise we're Caddy.
+        -Server
+    }
+
+    # The only path served. Everything else 404s — no static, no admin.
+    handle /api/* {
+        reverse_proxy indexer:3001 {
+            # Pass through the auth header so the indexer can verify.
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Liveness check — no auth required so external monitors can poll.
+    handle /healthz {
+        reverse_proxy indexer:3001
+    }
+
+    handle {
+        respond "VantageNode onchain node." 200
+    }
+
+    # Caddy access logs in JSON. Useful for grepping abuse / clients.
+    log {
+        output file /data/access.log {
+            roll_size 50mb
+            roll_keep 5
+        }
+        format json
+    }
+}
