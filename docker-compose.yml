@@ -45,10 +45,13 @@ services:
       - sh
       - -c
       - |
-        # Idempotent: only append the rpcauth line once per (re)start.
-        if ! grep -q "^rpcauth=" /data/.bitcoin/bitcoin.conf; then
-          echo "rpcauth=$RPCAUTH" >> /data/.bitcoin/bitcoin.conf
-        fi
+        # Write the rpcauth line to a sidecar file inside the data
+        # volume (writable) — the main bitcoin.conf is mounted read-only
+        # from the host and pulls this in via `includeconf=rpcauth.conf`.
+        # Using $$ (not $) so docker-compose passes the literal $RPCAUTH
+        # to the container shell instead of trying to interpolate it
+        # itself.
+        echo "rpcauth=$$RPCAUTH" > /data/.bitcoin/rpcauth.conf
         exec bitcoind -datadir=/data/.bitcoin
 
   postgres:
