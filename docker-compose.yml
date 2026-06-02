@@ -47,10 +47,12 @@ services:
       - |
         # Write the rpcauth line to a sidecar file inside the data
         # volume (writable) — the main bitcoin.conf is mounted read-only
-        # from the host and pulls this in via `includeconf=rpcauth.conf`.
-        # Using $$ (not $) so docker-compose passes the literal $RPCAUTH
-        # to the container shell instead of trying to interpolate it
-        # itself.
+        # from the host and pulls this in via includeconf=rpcauth.conf.
+        # The doubled $$ below is mandatory: docker-compose interpolates
+        # single-$ tokens at YAML parse time (even inside comments!), so
+        # the doubled form is what survives to the container shell as a
+        # literal single-$. The container then reads RPCAUTH from the
+        # environment block below.
         echo "rpcauth=$$RPCAUTH" > /data/.bitcoin/rpcauth.conf
         exec bitcoind -datadir=/data/.bitcoin
 
