@@ -1,0 +1,80 @@
+{
+  "title": "Bitcoin Node",
+  "tags": ["bitcoind", "vantagenode"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Verification progress",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "bitcoin_verification_progress * 100", "legendFormat": "% synced"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 4, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": 0}, {"color": "yellow", "value": 50}, {"color": "green", "value": 99}]}}}
+    },
+    {
+      "id": 2, "type": "stat", "title": "Blocks synced",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "bitcoin_blocks", "legendFormat": "blocks"}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0}}
+    },
+    {
+      "id": 3, "type": "stat", "title": "Block headers seen",
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "bitcoin_headers", "legendFormat": "headers"}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0}}
+    },
+    {
+      "id": 4, "type": "stat", "title": "Peers connected",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "bitcoin_peers", "legendFormat": "peers"}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": 0}, {"color": "yellow", "value": 5}, {"color": "green", "value": 15}]}}}
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Sync progress over time",
+      "gridPos": {"x": 0, "y": 4, "w": 24, "h": 8},
+      "targets": [{"expr": "bitcoin_verification_progress * 100", "legendFormat": "verification %"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 2, "min": 0, "max": 100}}
+    },
+    {
+      "id": 6, "type": "stat", "title": "Mempool size (tx)",
+      "gridPos": {"x": 0, "y": 12, "w": 6, "h": 4},
+      "targets": [{"expr": "bitcoin_mempool_size"}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0}}
+    },
+    {
+      "id": 7, "type": "stat", "title": "Mempool bytes",
+      "gridPos": {"x": 6, "y": 12, "w": 6, "h": 4},
+      "targets": [{"expr": "bitcoin_mempool_bytes"}],
+      "fieldConfig": {"defaults": {"unit": "decbytes", "decimals": 1}}
+    },
+    {
+      "id": 8, "type": "stat", "title": "Disk used by node data",
+      "gridPos": {"x": 12, "y": 12, "w": 6, "h": 4},
+      "targets": [{"expr": "bitcoin_size_on_disk"}],
+      "fieldConfig": {"defaults": {"unit": "decbytes", "decimals": 1}}
+    },
+    {
+      "id": 9, "type": "stat", "title": "Difficulty",
+      "gridPos": {"x": 18, "y": 12, "w": 6, "h": 4},
+      "targets": [{"expr": "bitcoin_difficulty"}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 2}}
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "Host CPU usage %",
+      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 7},
+      "targets": [{"expr": "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[2m])) * 100)", "legendFormat": "CPU"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 1, "min": 0, "max": 100}}
+    },
+    {
+      "id": 11, "type": "timeseries", "title": "Host RAM usage",
+      "gridPos": {"x": 12, "y": 16, "w": 12, "h": 7},
+      "targets": [
+        {"expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes", "legendFormat": "used"},
+        {"expr": "node_memory_MemTotal_bytes", "legendFormat": "total"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "decbytes", "decimals": 1}}
+    }
+  ]
+}

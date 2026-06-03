@@ -76,6 +76,12 @@ services:
       retries: 5
 
   indexer:
+    # Sits behind the `api` profile because the build needs a populated
+    # package-lock.json which we lock in alongside the first real Tier-0
+    # work. Until then, `docker compose up -d` brings up the core stack
+    # (bitcoind, postgres, observability) without trying to build this.
+    # Run explicitly with: docker compose --profile api up -d
+    profiles: ["api"]
     build:
       context: ./indexer
       dockerfile: Dockerfile
@@ -104,6 +110,9 @@ services:
       - "3001"
 
   caddy:
+    # Public TLS edge. Same `api` profile as the indexer — both come up
+    # together once the indexer is buildable AND DNS is pointing at us.
+    profiles: ["api"]
     image: caddy:2.8-alpine
     container_name: vn-caddy
     restart: unless-stopped
@@ -118,6 +127,92 @@ services:
       - caddy-config:/config
     environment:
       NODE_HOSTNAME: ${NODE_HOSTNAME}
+
+  # ============================================================
+  # OBSERVABILITY — Portainer / Prometheus / Grafana / Uptime Kuma
+  # All UIs exposed on the public IP with strong admin passwords set
+  # via .env. Once DNS+Caddy are live (F2), these move behind path-
+  # based auth on the main hostname.
+  # ============================================================
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: vn-portainer
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+    # Portainer ships with no admin user; first browser visit prompts
+    # to create one. We also feed an --admin-password-file via
+    # entrypoint args to seed a known one (avoids race where someone
+    # else hits the IP first and claims admin).
+    command:
+      - --admin-password
+      - ${PORTAINER_ADMIN_BCRYPT}
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: vn-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=90d
+      - --web.enable-lifecycle
+    # host.docker.internal lets prometheus reach the host's node_exporter
+    # on port 9100 without us hard-coding the LAN IP of the bridge.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Bound to compose network only — Grafana queries it, no external exposure.
+    expose:
+      - "9090"
+
+  bitcoin-exporter:
+    image: jvstein/bitcoin-prometheus-exporter:latest
+    container_name: vn-bitcoin-exporter
+    restart: unless-stopped
+    depends_on:
+      bitcoind:
+        condition: service_started
+    environment:
+      BITCOIN_RPC_HOST: bitcoind
+      BITCOIN_RPC_PORT: "8332"
+      BITCOIN_RPC_USER: ${BITCOIN_RPC_USER}
+      BITCOIN_RPC_PASSWORD: ${BITCOIN_RPC_PASSWORD}
+    expose:
+      - "9332"
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: vn-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SERVER_ROOT_URL: http://65.108.141.77:3000
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: vn-uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - uptime-kuma-data:/app/data
+    ports:
+      - "3001:3001"
 
 volumes:
   bitcoin-data:
@@ -134,3 +229,7 @@ volumes:
       device: /opt/vantagenode/postgres
   caddy-data:
   caddy-config:
+  portainer-data:
+  prometheus-data:
+  grafana-data:
+  uptime-kuma-data:

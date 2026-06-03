@@ -1,0 +1,13 @@
+# Grafana auto-loader for any *.json dashboard dropped into
+# /var/lib/grafana/dashboards/. Each file imports as a dashboard
+# without needing to click around the UI.
+apiVersion: 1
+providers:
+  - name: VantageNode dashboards
+    folder: VantageNode
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

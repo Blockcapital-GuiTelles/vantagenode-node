@@ -1,0 +1,31 @@
+# Prometheus config — scrapes three targets at 30s cadence.
+# - bitcoin-exporter: chain tip, peers, mempool, IBD progress, fees
+# - node_exporter: CPU, RAM, disk, network (host metrics via host network)
+# - prometheus itself: self-metrics
+#
+# Retention is set on the prometheus command line (90d), TSDB lives in
+# the prometheus-data volume.
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    cluster: vantagenode-node
+    host: hel1
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: bitcoind
+    static_configs:
+      - targets: ["bitcoin-exporter:9332"]
+    scrape_interval: 60s  # bitcoind RPC is heavier; back off a bit
+
+  # node_exporter runs on the HOST (port 9100, loopback) — installed by
+  # provision.sh. We reach it via host.docker.internal which is set up
+  # on Linux through extra_hosts on the indexer/observability tier.
+  - job_name: node
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
