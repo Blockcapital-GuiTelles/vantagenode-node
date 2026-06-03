@@ -139,8 +139,11 @@ services:
     image: portainer/portainer-ce:latest
     container_name: vn-portainer
     restart: unless-stopped
+    # Bind only to the Tailscale interface IP so the UI is reachable
+    # exclusively over the tailnet. Set ${TAILSCALE_IP} in .env to your
+    # node's tailscale IP (run `tailscale ip -4` to find it).
     ports:
-      - "9000:9000"
+      - "${TAILSCALE_IP}:9000:9000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer-data:/data
@@ -203,7 +206,7 @@ services:
       - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "3000:3000"
+      - "${TAILSCALE_IP}:3000:3000"
 
   uptime-kuma:
     image: louislam/uptime-kuma:1
@@ -212,7 +215,7 @@ services:
     volumes:
       - uptime-kuma-data:/app/data
     ports:
-      - "3001:3001"
+      - "${TAILSCALE_IP}:3001:3001"
 
 volumes:
   bitcoin-data:
