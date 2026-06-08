@@ -108,6 +108,12 @@ ufw allow 22/tcp comment 'SSH'
 ufw allow 80/tcp comment 'HTTP (Caddy → Let''s Encrypt challenge)'
 ufw allow 443/tcp comment 'HTTPS API'
 ufw allow 8333/tcp comment 'Bitcoin P2P'
+# node_exporter on :9100 is reached by the Prometheus container via
+# the host-gateway. The two Docker default bridges are 172.16/12 and
+# 10/8 — allow scraping from both so the observability stack works
+# regardless of which bridge docker compose picks at start-up.
+ufw allow from 172.16.0.0/12 to any port 9100 proto tcp comment 'node_exporter ← docker bridge'
+ufw allow from 10.0.0.0/8 to any port 9100 proto tcp comment 'node_exporter ← docker bridge'
 ufw --force enable
 
 # ============================================================
@@ -180,7 +186,12 @@ chown -R vn:vn /opt/vantagenode
 # bind mount semantics).
 
 # ============================================================
-# 9. Prometheus node_exporter (loopback)
+# 9. Prometheus node_exporter (bound on all interfaces; ufw still
+#    blocks WAN — only the docker bridge subnets (set up in step 11)
+#    are allowed to reach :9100, so Prometheus inside the compose
+#    network scrapes it via host-gateway. Original bind 127.0.0.1
+#    failed because the bridge gateway IP is NOT loopback from
+#    node_exporter's POV.
 # ============================================================
 if ! command -v node_exporter >/dev/null 2>&1; then
     log "Installing node_exporter..."
@@ -200,7 +211,7 @@ After=network.target
 User=node_exporter
 Group=node_exporter
 Type=simple
-ExecStart=/usr/local/bin/node_exporter --web.listen-address=127.0.0.1:9100
+ExecStart=/usr/local/bin/node_exporter --web.listen-address=:9100
 
 [Install]
 WantedBy=multi-user.target
