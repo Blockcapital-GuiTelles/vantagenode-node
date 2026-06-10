@@ -4,8 +4,16 @@
 // with basic auth, parse the response, throw on error".
 
 export class RpcError extends Error {
-  constructor(public code: number, message: string) {
+  // Explicit field declaration + assignment in the body — Node 22's
+  // --experimental-strip-types (used in production CMD) does NOT
+  // understand TS parameter properties (`public code: number` in the
+  // ctor signature). Strip-only mode rejects that syntax wholesale.
+  // Declaring the field on the class works under strip mode and is
+  // equivalent at runtime.
+  code: number;
+  constructor(code: number, message: string) {
     super(message);
+    this.code = code;
     this.name = 'RpcError';
   }
 }
