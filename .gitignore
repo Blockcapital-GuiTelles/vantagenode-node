@@ -10,6 +10,13 @@ data/
 debug.log
 bitcoin/
 
+# ...except the small baked snapshots tier_test handlers read at boot.
+# Sub-MB JSON cached from the BL refresher, used by handlers like
+# mvrv_test until the live Tier-2 indexer comes online. Real archive
+# bitcoin data still excluded via the broader rule above.
+!indexer/data/
+!indexer/data/*.json
+
 # Build artefacts.
 indexer/node_modules/
 indexer/dist/
