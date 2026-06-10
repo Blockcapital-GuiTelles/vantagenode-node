@@ -9,6 +9,11 @@ RUN npm ci --omit=optional
 
 COPY tsconfig.json ./
 COPY src ./src
+# Baked snapshots used by tier_test handlers (real MVRV history,
+# eventually NUPL/SOPR/etc) until the live Tier-2 indexer comes
+# online. Tiny (~300KB) so committing them is cheaper than wiring
+# a startup-time download.
+COPY data ./data
 
 ENV NODE_ENV=production
 ENV PORT=3001

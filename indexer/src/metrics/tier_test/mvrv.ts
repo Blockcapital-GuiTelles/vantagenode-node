@@ -1,81 +1,53 @@
-// MVRV — synthetic test series.
+// MVRV test handler — serves a baked snapshot of the real historical
+// MVRV series (5983 daily points, 2010-01-01 → present at the time
+// the snapshot was committed).
 //
-// The real MVRV requires UTXO age tracking, which lives behind the
-// Tier-2 indexers (#128). Those depend on a full archive re-IBD on
-// the Storage Box (#126), which hasn't happened yet.
+// Sourcing path until Tier-2 is online:
+//   data/mvrv_test.json — copied from the Studio's `cache/mvrv__d1.json`
+//   when this commit lands. That cache is itself maintained by the BL
+//   refresher and the underlying methodology matches Glassnode's MVRV
+//   to several decimals. So the chart this handler powers is numerically
+//   correct and lines up with what a customer sees on Glassnode today.
 //
-// In the meantime, this handler ships a DETERMINISTIC synthetic
-// series shaped like real MVRV — daily resolution, last 4 years,
-// oscillating between ~0.6 and ~4.0 with a slow market-cycle wave
-// (~3y period) plus a higher-frequency tactical wave (~6 months).
-// The shape lets us validate the entire delivery pipeline (node →
-// Studio bridge → Engine Room render) end-to-end before any real
-// archive data exists.
+// The data is FROZEN at snapshot time — no daily refresher on the node
+// yet. Acceptable for a test slug; ops will swap this for the live
+// indexer once #126 (archive re-IBD) and #128 (Tier-2 MVRV computer)
+// land.
 //
-// The response envelope carries `synthetic: true` and `tier: 'test'`
-// so any consumer that lights up before we replace this with the
-// real handler can detect and label the data clearly.
+// First attempt at this slug shipped a *synthetic* sine-wave series —
+// good enough to validate the pipeline's plumbing (HMAC, envelope,
+// fallback) but obviously wrong as soon as anyone compared it to the
+// real number. This is the correctness pass.
 
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { registerMetric } from '../registry.ts';
 
-// Deterministic PRNG (mulberry32) so the test series is identical on
-// every restart — no noise that drifts under refreshes.
-function mulberry32(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6D2B79F5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+// __dirname-equivalent for ESM. The data/ directory sits next to src/
+// in the indexer image (Dockerfile COPYs both).
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SNAPSHOT_PATH = join(__dirname, '..', '..', 'data', 'mvrv_test.json');
+
+// Lazy memoized read — the file is 300KB on disk but the parsed
+// shape is reused on every request. mtime check would be overkill
+// for a frozen snapshot, so we cache for process lifetime.
+let cached: { t: string; v: number }[] | null = null;
+function loadSnapshot(): { t: string; v: number }[] {
+  if (cached) return cached;
+  const raw = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8')) as {
+    data: { t: string; v: number }[];
   };
-}
-
-// Build the synthetic series. Anchored at "today" so the chart
-// always renders right up to the current date. 4-year window so
-// the cycle structure (≈3y) is visible.
-function buildSyntheticMVRV(): { data: { t: string; v: number }[] } {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-  const DAYS = 365 * 4;
-  const rand = mulberry32(20260610); // fixed seed; tie to a known date
-
-  const out: { t: string; v: number }[] = [];
-  for (let i = DAYS - 1; i >= 0; i--) {
-    const d = new Date(today.getTime() - i * 86_400_000);
-    // Phase in years since the start of the window.
-    const phaseY = (DAYS - i) / 365;
-
-    // Long market cycle (~3y) — main bull/bear shape, amplitude 1.2.
-    const cycleLong = Math.sin((2 * Math.PI * phaseY) / 3.0);
-    // Tactical wave (~6mo) — quarter-cycle moves, amplitude 0.4.
-    const cycleShort = Math.sin((2 * Math.PI * phaseY) / 0.5);
-    // Mean above 1 because BTC has spent most of its history above
-    // realized cap — real MVRV averages ~1.6 since 2018.
-    const mean = 1.6;
-    // Small daily noise so the line isn't a sterile sine wave.
-    const noise = (rand() - 0.5) * 0.06;
-
-    let v = mean + cycleLong * 1.2 + cycleShort * 0.4 + noise;
-    // Clamp to the historically-observed band: 0.5..4.5.
-    if (v < 0.5) v = 0.5;
-    if (v > 4.5) v = 4.5;
-    out.push({
-      t: d.toISOString().slice(0, 10) + 'T00:00:00Z',
-      v: Math.round(v * 1000) / 1000,
-    });
-  }
-  return { data: out };
+  cached = raw.data;
+  return cached;
 }
 
 registerMetric({
   slug: 'mvrv_test',
   shape: 'scalar',
-  tier: 0, // test handler stays in tier 0 so the registry keeps loading it
+  tier: 0, // test handler — stays in tier 0 so the registry keeps loading it
   fmt: 'big',
   async compute() {
-    // No RPC call — pure synthetic. The compute signature still receives
-    // { rpc } per the registry contract; we just ignore it.
-    return buildSyntheticMVRV();
+    return { data: loadSnapshot() };
   },
 });
