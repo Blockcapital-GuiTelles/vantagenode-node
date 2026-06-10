@@ -25,9 +25,11 @@ import { fileURLToPath } from 'node:url';
 import { registerMetric } from '../registry.ts';
 
 // __dirname-equivalent for ESM. The data/ directory sits next to src/
-// in the indexer image (Dockerfile COPYs both).
+// in the indexer image (Dockerfile COPYs both): /app/data and /app/src.
+// This file lives at src/metrics/tier_test/, so going three parents
+// up reaches /app, where ./data/ is.
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SNAPSHOT_PATH = join(__dirname, '..', '..', 'data', 'mvrv_test.json');
+const SNAPSHOT_PATH = join(__dirname, '..', '..', '..', 'data', 'mvrv_test.json');
 
 // Lazy memoized read — the file is 300KB on disk but the parsed
 // shape is reused on every request. mtime check would be overkill
