@@ -22,10 +22,13 @@ import { getMetricHandler, listMetrics } from './metrics/registry.ts';
 // Register every Tier-0 metric. Import side effect: each file in
 // metrics/tier0/* calls registerMetric() at import time.
 import './metrics/tier0/index.ts';
-// Synthetic test handlers (Tier 1+ data shapes, but with placeholder
-// series so we can wire the Studio → Engine Room pipeline before the
-// real archive-backed indexers come online).
+// Tier-test handlers. Each is a baked snapshot of an indicator that
+// the live Tier-2 indexer will eventually compute on-node from UTXO
+// age + price. Lets the Studio Engine Room render real values now
+// while the archive re-IBD (#126) and Tier-2 computer (#128) are
+// still pending.
 import './metrics/tier_test/mvrv.ts';
+import './metrics/tier_test/realized_loss.ts';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
