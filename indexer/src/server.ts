@@ -22,6 +22,10 @@ import { getMetricHandler, listMetrics } from './metrics/registry.ts';
 // Register every Tier-0 metric. Import side effect: each file in
 // metrics/tier0/* calls registerMetric() at import time.
 import './metrics/tier0/index.ts';
+// Synthetic test handlers (Tier 1+ data shapes, but with placeholder
+// series so we can wire the Studio → Engine Room pipeline before the
+// real archive-backed indexers come online).
+import './metrics/tier_test/mvrv.ts';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
