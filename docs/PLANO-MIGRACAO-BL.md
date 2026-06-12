@@ -91,28 +91,48 @@ on-node ainda não existe (T2).
 
 ---
 
-## 4. Fases (re-baseline 2026-06-11)
+## 4. Roadmap em DIAS (re-baseline 2026-06-11 — execução em ritmo de IA)
 
-**Pré-requisito (em curso):** re-IBD archive terminar (#126).
+> Princípio: nada de semanas. Cada dia fecha entregas verificáveis. Dois
+> destravamentos de engenharia tornam isso possível:
+>
+> **(a) Backfill começa DURANTE o IBD.** O IBD baixa blocos em ordem — os
+> anos 2009-202x já validados estão NO DISCO antes do sync terminar. O walk
+> do indexer processa o trecho já sincronizado e vai "caçando a ponta",
+> em vez de esperar 100%.
+>
+> **(b) Um walk só para T1+T2.** Em vez de dois backfills (T1 depois T2),
+> um único passe do gênesis à ponta mantém o UTXO-set com `value`,
+> `price_at_creation` e bucket de idade — e emite TODOS os agregados
+> diários (supply cohorts, CDD, realized cap, P/L, HODL waves, URPD) de
+> uma vez. O custo extra do T2 dentro do walk é marginal; re-walk é que
+> custa caro.
 
-| Fase | Duração | Entrega | Slugs cutover |
+| Dia | Entrega | Gate de saída |
+|---|---|---|
+| **D0** | Destravar healthz (bitcoind RPC p/ indexer) + medir IBD; **price oracle v1** (closes diários, mediana de exchanges, backfill 2010→hoje + refresher) — não depende da chain; `parity-check.sh` funcional | oracle com ~5.8K dias; healthz `ok:true` |
+| **D1** | Validar T0 (10 slugs vs BL); schema Postgres + consumer ZMQ; **walk único T1+T2 começa** sobre os blocos já em disco | T0 🟢; walk processando ≥ 2015 |
+| **D2** | Walk avança (checkpoint/resume); agregadores T1 emitindo snapshots diários; shadow parity dos determinísticos | difficulty/supply_total/txs ✅ cutover |
+| **D3** | Walk alcança a ponta (ou a borda do IBD); T1 completo: supply LTH/STH, CDD, dormancy, volumes, fees, HODL waves | ~30 slugs T1 em shadow |
+| **D4** | T2 emite: realized cap/price, MVRV/NUPL/SOPR + cohorts; parity 90d + âncoras (topo 2021, FTX, halving) | erros ≤ tolerância por classe |
+| **D5** | T2 pesados: URPD, cointime (15), unrealized, supply in P/L, binned | catálogo T2 completo em shadow |
+| **D6** | Relatório de paridade COMPLETO (85 slugs, node × BL, 90d + âncoras) entregue pra revisão | aprovação humana por família |
+| **D7-D8** | Cutover gradual por risco (flag por-slug, fallback automático); 17 derivados migram sozinhos | catálogo 100% node |
+| **D9-D10** | Buffer p/ divergências + hardening (reorg test, restart test, snapshot Storage Box) | BL em shadow 30 dias → desligar |
+
+Condicionante única: o fim do IBD limita o D3 (o walk só alcança a ponta
+quando a chain estiver completa). Tudo até D2 roda em paralelo ao IBD.
+
+### Gargalos identificados e como cada um é resolvido
+
+| # | Gargalo | Impacto | Solução |
 |---|---|---|---|
-| **A — Validação T0 + Price Oracle** | 1–2 sem | valida os 10 T0 (🟡→🟢); oracle: closes diários mediana de exchanges, backfill 2010→hoje (2010-2012 via fontes históricas — risco mapeado); shadow de hashrate/difficulty/txs vs BL | ~7 |
-| **B — Tier 1 (Postgres + backfill)** | 3–4 sem | schema + ZMQ + walk genesis→tip (2–4 dias de processamento, checkpointed, ~150 GB); supply family, CDD/dormancy, volumes, fees, HODL waves, quantiles, script types | ~30 |
-| **C — Tier 2 (cost basis)** | 5–6 sem | `price_at_creation` por UTXO; realized family completa, MVRV/NUPL/SOPR + cohorts, URPD, cointime (15), unrealized, supply in P/L | ~45 |
-| **D — Cutover final** | 2 sem | flip dos derivados (17 migram sozinhos), 90 dias de estabilidade, **desligar assinatura BL** | +17 auto |
-
-Total estimado: **11–14 semanas** após o fim do re-IBD. O rollout é gradual e
-reversível a qualquer momento (a flag por-slug cai de volta pra BL em caso de
-divergência — fallback já implementado e testado).
-
-### Ordem de cutover dentro de cada fase (risco crescente)
-1. Consenso puro (determinístico, erro impossível): difficulty, supply_total, txs.
-2. Ratios sem preço: liveliness, vaultedness, supply percentuais.
-3. Séries com preço: fees USD, realized family, MVRV.
-4. Binned/pesados por último: URPD, HODL waves, quantiles.
-
----
+| 1 | **re-IBD em curso** (#126) — e healthz reportando RPC down | bloqueia o walk de alcançar a ponta | monitorar/destravar D0; backfill paralelo ao IBD (destravamento *a*) elimina a espera |
+| 2 | **Price oracle inexistente** | trava T2 e o trecho 2010-2012 | construir D0 — independe da chain; 2010-2012 best-effort com BL de referência no shadow |
+| 3 | **Backfill compute-bound** | walk de ~900K blocos | walk único T1+T2 (destravamento *b*), checkpoint por altura, CPU do AX42 dedicada |
+| 4 | **Acesso operacional ao node** | sessões do agente sem SSH autorizado → operação manual | autorizar SSH ao node nas sessões de execução (ou rodar via runbook colado) |
+| 5 | **Revisão humana é serial** | cutover de 85 slugs não pode pingar 1-a-1 | relatório de paridade em LOTE (D6) com aprovação por família, não por slug |
+| 6 | **Dependência BL até o fim** | custo + risco de terceiro | é o objetivo do plano; BL vira shadow em D8 e desliga após 30 dias estáveis |
 
 ## 5. Riscos e mitigações
 
